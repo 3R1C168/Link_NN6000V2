@@ -296,11 +296,75 @@ remove_attendedsysupgrade() {
 clone_luci_tailscale() {
     local TEMP_DIR="$OPENWRT_PACKAGES_DIR/luci-app-tailscale-community-temp"
     local TARGET_DIR="$OPENWRT_PACKAGES_DIR/luci-app-tailscale-community"
-    
+
     clone_packages "luci-app-tailscale-community" \
         "${GITHUB_BASE}Tokisaki-Galaxy/luci-app-tailscale-community.git" \
         "$TEMP_DIR" \
         "" \
         "" \
         "rm -rf \"$TARGET_DIR\" 2>/dev/null || true; mv \"$TEMP_DIR/luci-app-tailscale-community\" \"$TARGET_DIR\"; rm -rf \"$TEMP_DIR\""
+}
+
+# ============================================================
+# 以下三个函数为自定义新增：OpenClash / Nikki / MosDNS
+# 说明：原项目 feeds 默认不含这三个插件，需手动 clone 注入
+# ============================================================
+
+# OpenClash —— Clash 图形界面（社区版），使用 mihomo/clash-meta 内核
+# 仓库根目录直接含 luci-app-openclash，整仓 clone 到 feeds 即可
+clone_openclash() {
+    local TARGET_DIR="$OPENWRT_PACKAGES_DIR/luci-app-openclash"
+
+    clone_packages "luci-app-openclash" \
+        "${GITHUB_BASE}vernesong/OpenClash.git" \
+        "$TARGET_DIR"
+}
+
+# Nikki —— mihomo (clash.meta) 的全新 LuCI 前端，界面现代
+# 仓库为"多包聚合"结构：luci-app-nikki / nikki / mihomo-alpha / mihomo-meta
+# 整仓 clone 到 feeds 目录后，每个子目录都是独立的编译包
+clone_nikki() {
+    local TEMP_DIR="$OPENWRT_PACKAGES_DIR/nikki-temp"
+    local TARGET_DIR="$OPENWRT_PACKAGES_DIR/nikki-repo"
+
+    # 克隆到临时目录（避免与 feeds install 冲突）
+    clone_packages "OpenWrt-nikki" \
+        "${GITHUB_BASE}nikkinikki-org/OpenWrt-nikki.git" \
+        "$TEMP_DIR"
+
+    # 把仓库内 4 个独立包目录分别移动到 feeds 根，使其可被识别为独立 feed 包
+    local pkg
+    for pkg in luci-app-nikki nikki mihomo-alpha mihomo-meta; do
+        rm -rf "$OPENWRT_PACKAGES_DIR/$pkg" 2>/dev/null || true
+        if [ -d "$TEMP_DIR/$pkg" ]; then
+            mv "$TEMP_DIR/$pkg" "$OPENWRT_PACKAGES_DIR/$pkg"
+        fi
+    done
+
+    rm -rf "$TEMP_DIR"
+}
+
+# MosDNS —— DNS 分流引擎，配合 geodata 实现国内外 DNS 智能分流
+# 依赖说明：
+#   - luci-app-mosdns 仓库自带 mosdns core 目录（v5 分支）
+#   - 另需 v2ray-geodata 提供 geoip/geosite 数据文件
+clone_mosdns() {
+    local MOSDNS_DIR="$OPENWRT_PACKAGES_DIR/luci-app-mosdns"
+    local GEODATA_DIR="$OPENWRT_PACKAGES_DIR/v2ray-geodata"
+
+    # 克隆 luci-app-mosdns（v5 分支，内含 mosdns core 编译规则）
+    rm -rf "$MOSDNS_DIR" 2>/dev/null || true
+    if ! git clone --depth 1 -b v5 "${GITHUB_BASE}sbwml/luci-app-mosdns.git" "$MOSDNS_DIR"; then
+        echo "错误：克隆 luci-app-mosdns 失败" >&2
+        exit 1
+    fi
+
+    # geodata 数据包（geoip / geosite），mosdns 启动必需
+    rm -rf "$GEODATA_DIR" 2>/dev/null || true
+    if ! git clone --depth 1 "${GITHUB_BASE}sbwml/v2ray-geodata.git" "$GEODATA_DIR"; then
+        echo "错误：克隆 v2ray-geodata 失败" >&2
+        exit 1
+    fi
+
+    echo "✓ luci-app-mosdns + v2ray-geodata 克隆完成"
 }
