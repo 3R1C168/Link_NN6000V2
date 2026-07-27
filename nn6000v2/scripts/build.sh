@@ -45,7 +45,14 @@ remove_uhttpd_dependency() {
 apply_config() {
     \cp -f "$CONFIG_FILE" "$BASE_PATH/../$BUILD_DIR/.config"
 
-    cat "$BASE_PATH/configs/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+    # 仅在启用 dockerman 时才追加 docker 相关内核模块依赖
+    # 自定义修改：已移除 dockerman，故 docker_deps 不会被追加
+    if grep -q "CONFIG_PACKAGE_luci-app-dockerman=y" "$CONFIG_FILE"; then
+        cat "$BASE_PATH/configs/docker_deps.config" >> "$BASE_PATH/../$BUILD_DIR/.config"
+        echo "已追加 docker 依赖（检测到 dockerman 启用）"
+    else
+        echo "跳过 docker 依赖（dockerman 未启用）"
+    fi
 }
 
 fix_netfilter_kmod_clash() {
