@@ -50,6 +50,10 @@ main() {
     clone_oaf
     clone_luci_tailscale
     clone_passwall
+    # 自定义新增的三个插件源（OpenClash / Nikki / MosDNS）
+    clone_openclash
+    clone_nikki
+    clone_mosdns
     install_feeds
     fix_smartdns_makefile
     update_docker_stack
