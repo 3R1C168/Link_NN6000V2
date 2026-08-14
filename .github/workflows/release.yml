@@ -108,17 +108,6 @@ jobs:
             sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
           fi
 
-          # 上游 gettext-full 1.0 host 编译损坏（stdcountof.h 缺失），
-          # 用官方 openwrt 的 0.24.2 覆盖，待上游修复后可移除
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/openwrt/openwrt.git /tmp/ow-gettext
-          cd /tmp/ow-gettext
-          git sparse-checkout set package/libs/gettext-full
-          rm -rf /home/runner/work/Link_NN6000V2/Link_NN6000V2/action_build/package/libs/gettext-full
-          cp -r package/libs/gettext-full /home/runner/work/Link_NN6000V2/Link_NN6000V2/action_build/package/libs/
-          cd -
-          rm -rf /tmp/ow-gettext
-          grep "PKG_VERSION" /home/runner/work/Link_NN6000V2/Link_NN6000V2/action_build/package/libs/gettext-full/Makefile
-
       - name: Restore Build Dependencies Cache
         uses: actions/cache/restore@v5.0.4
         with:
