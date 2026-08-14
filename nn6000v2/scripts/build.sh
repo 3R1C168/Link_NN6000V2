@@ -130,11 +130,20 @@ if [[ $Build_Mod == "debug" ]]; then
     exit 0
 fi
 
-# canary 模式：只编译带 WiFi 版本验证可编性，不触发无 WiFi 版本
+# canary 模式：只编译无 WiFi 版本验证可编性（日常用不上 WiFi，nowifi 更贴近实际使用）
 if [[ $Build_Mod == "canary" ]]; then
+    sed -i 's/^CONFIG_PACKAGE_kmod-ath=y$/CONFIG_PACKAGE_kmod-ath=n/' .config
+    sed -i 's/^CONFIG_PACKAGE_kmod-ath11k=y$/CONFIG_PACKAGE_kmod-ath11k=n/' .config
+    sed -i 's/^CONFIG_PACKAGE_kmod-ath11k-ahb=y$/CONFIG_PACKAGE_kmod-ath11k-ahb=n/' .config
+    sed -i 's/^CONFIG_PACKAGE_kmod-ath11k-pci=y$/CONFIG_PACKAGE_kmod-ath11k-pci=n/' .config
+    sed -i 's/^CONFIG_PACKAGE_ath11k-firmware-ipq6018=y$/CONFIG_PACKAGE_ath11k-firmware-ipq6018=n/' .config
+    sed -i 's/^CONFIG_PACKAGE_ath11k-firmware-ipq6018-ddwrt=y$/CONFIG_PACKAGE_ath11k-firmware-ipq6018-ddwrt=n/' .config
+    sed -i 's/^CONFIG_PACKAGE_ath11k-firmware-qcn9074=y$/CONFIG_PACKAGE_ath11k-firmware-qcn9074=n/' .config
+    sed -i 's/^CONFIG_PACKAGE_ath11k-firmware-qcn9074-ddwrt=y$/CONFIG_PACKAGE_ath11k-firmware-qcn9074-ddwrt=n/' .config
+    make defconfig
     make download -j$(($(nproc) * 2))
     make -j$(($(nproc) + 1)) || make -j1 V=s
-    echo "canary 构建通过"
+    echo "canary 构建（nowifi）通过"
     exit 0
 fi
 

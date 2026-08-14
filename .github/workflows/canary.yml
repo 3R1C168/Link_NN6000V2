@@ -93,7 +93,7 @@ jobs:
             canary-
             ubuntu-24.04-
 
-      - name: Canary Build (wifi version only)
+      - name: Canary Build (nowifi version only)
         run: |
           ./nn6000v2/scripts/build.sh ${{ env.DEVICE_MODEL }} canary
 
