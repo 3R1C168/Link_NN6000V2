@@ -95,10 +95,26 @@ jobs:
         run: |
           chmod +x ./nn6000v2/scripts/update.sh
           chmod +x ./nn6000v2/scripts/build.sh
-          
+
+          # 读取金丝雀验证过的上游提交（无锁文件则用上游 HEAD）
+          LOCKED=$(cat nn6000v2/UPSTREAM_COMMIT 2>/dev/null | tr -d '[:space:]' || echo "")
+          if [ -n "$LOCKED" ]; then
+            echo "LOCKED_COMMIT=$LOCKED" >> $GITHUB_ENV
+            echo "使用已验证的上游提交：$LOCKED"
+          else
+            echo "无锁文件，使用上游 HEAD（首次初始化）"
+            echo "LOCKED_COMMIT=" >> $GITHUB_ENV
+          fi
+
           # 克隆仓库
           echo "克隆仓库：${{ env.REPO_URL }} 分支：${{ env.REPO_BRANCH }}"
           git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} ./action_build
+          if [ -n "$LOCKED" ]; then
+            cd ./action_build
+            git fetch --depth 1 origin $LOCKED
+            git checkout -q $LOCKED
+            cd ..
+          fi
           cd ./action_build && git rev-parse HEAD > ../repo_flag
           cd ..
           
@@ -143,7 +159,7 @@ jobs:
             echo "未输入 PPPoE 账号密码，使用默认值 '-'"
           fi
           
-          ./nn6000v2/scripts/build.sh ${{ env.DEVICE_MODEL }}
+          COMMIT_HASH="$LOCKED_COMMIT" ./nn6000v2/scripts/build.sh ${{ env.DEVICE_MODEL }}
           
           # 获取内核版本
           FIRST_MANIFEST=$(ls ./firmware/immortalwrt-*.manifest 2>/dev/null | head -1)

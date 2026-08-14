@@ -34,10 +34,15 @@ clean_up() {
 }
 
 reset_feeds_conf() {
+    if [[ -n $COMMIT_HASH && $COMMIT_HASH != "none" ]]; then
+        # 锁定提交模式：不 pull 回 HEAD，归位到锁定提交
+        git checkout -q $COMMIT_HASH
+        git reset --hard $COMMIT_HASH
+        git clean -f -d
+        echo "已锁定上游提交：$COMMIT_HASH"
+        return
+    fi
     git reset --hard origin/$REPO_BRANCH
     git clean -f -d
     git pull
-    if [[ $COMMIT_HASH != "none" ]]; then
-        git checkout $COMMIT_HASH
-    fi
 }

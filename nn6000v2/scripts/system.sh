@@ -1,4 +1,27 @@
 #!/usr/bin/env bash
+pin_gettext_full() {
+    # 上游 VIKINGYFY/immortalwrt 2026-08-04 起 gettext-full 升 1.0，host 编译报
+    # stdcountof.h 缺失。用官方 openwrt 的 0.24.2 覆盖，待上游修复后移除。
+    # 必须在 reset_feeds_conf 之后调用，否则会被 git reset --hard 还原。
+    local gt_dir="$BUILD_DIR/package/libs/gettext-full"
+    if grep -q "PKG_VERSION:=0.24.2" "$gt_dir/Makefile" 2>/dev/null; then
+        echo "gettext-full 已是 0.24.2，跳过覆盖"
+        return 0
+    fi
+    local tmp
+    tmp=$(mktemp -d)
+    git clone -q --depth 1 --filter=blob:none --sparse https://github.com/openwrt/openwrt.git "$tmp/ow" || {
+        echo "错误：克隆 openwrt 失败，无法回退 gettext-full" >&2
+        rm -rf "$tmp"
+        exit 1
+    }
+    (cd "$tmp/ow" && git sparse-checkout set package/libs/gettext-full)
+    rm -rf "$gt_dir"
+    cp -r "$tmp/ow/package/libs/gettext-full" "$gt_dir"
+    rm -rf "$tmp"
+    echo "✓ gettext-full 已回退到官方 0.24.2"
+}
+
 change_dnsmasq2full() {
     if ! grep -q "dnsmasq-full" $BUILD_DIR/include/target.mk; then
         sed -i 's/dnsmasq/dnsmasq-full/g' $BUILD_DIR/include/target.mk

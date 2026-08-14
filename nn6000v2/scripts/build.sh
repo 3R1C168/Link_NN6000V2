@@ -130,6 +130,14 @@ if [[ $Build_Mod == "debug" ]]; then
     exit 0
 fi
 
+# canary 模式：只编译带 WiFi 版本验证可编性，不触发无 WiFi 版本
+if [[ $Build_Mod == "canary" ]]; then
+    make download -j$(($(nproc) * 2))
+    make -j$(($(nproc) + 1)) || make -j1 V=s
+    echo "canary 构建通过"
+    exit 0
+fi
+
 TARGET_DIR="$BASE_PATH/../$BUILD_DIR/bin/targets"
 if [[ -d $TARGET_DIR && "$Dev" != *"nowifi"* ]]; then
     find "$TARGET_DIR" -type f \( -name "*.bin" -o -name "*.manifest" -o -name "*efi.img.gz" -o -name "*.itb" -o -name "*.fip" -o -name "*.ubi" -o -name "*rootfs.tar.gz" \) -exec rm -f {} +

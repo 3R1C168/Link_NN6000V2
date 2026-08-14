@@ -38,6 +38,7 @@ main() {
     clone_repo
     clean_up
     reset_feeds_conf
+    pin_gettext_full
     update_feeds
     update_golang
     clone_quickfile

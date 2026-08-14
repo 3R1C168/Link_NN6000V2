@@ -1,0 +1,118 @@
+name: Canary_Check
+
+# 金丝雀构建：每 3 天（正式构建前 4 小时）拉上游最新 HEAD 试编。
+# 成功 → 把验证过的提交号写回 nn6000v2/UPSTREAM_COMMIT，正式构建用它。
+# 失败 → 不动锁，正式构建继续用上次验证过的提交，固件不断供。
+on:
+  workflow_dispatch:
+  schedule:
+    # UTC 16:00 = 北京时间 00:00（正式构建 UTC 20:00 前 4 小时）
+    - cron: '0 16 */3 * *'
+
+env:
+  REPO_URL: https://github.com/VIKINGYFY/immortalwrt.git
+  REPO_BRANCH: main
+  DEVICE_MODEL: link_nn6000v2_immwrt
+
+permissions:
+  contents: write
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-24.04
+    outputs:
+      upstream_head: ${{ steps.head.outputs.sha }}
+      locked: ${{ steps.lock.outputs.locked }}
+      needs_build: ${{ steps.lock.outputs.needs_build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Compare upstream HEAD with lock
+        id: head
+        run: |
+          LOCKED=$(cat nn6000v2/UPSTREAM_COMMIT 2>/dev/null | tr -d '[:space:]' || echo "")
+          UPSTREAM=$(git ls-remote ${{ env.REPO_URL }} refs/heads/${{ env.REPO_BRANCH }} | cut -f1)
+          echo "sha=$UPSTREAM" >> $GITHUB_OUTPUT
+          echo "上游 HEAD: $UPSTREAM"
+          echo "当前锁定: ${LOCKED:-<无>}"
+          echo "locked=$LOCKED" >> $GITHUB_OUTPUT
+
+      - name: Check if canary build needed
+        id: lock
+        run: |
+          if [ -z "${{ steps.head.outputs.locked }}" ] || [ "${{ steps.head.outputs.locked }}" != "${{ steps.head.outputs.sha }}" ]; then
+            echo "上游有更新，需要金丝雀构建"
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "上游无变化，跳过"
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  canary-build:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.needs_build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Build System Setup
+        run: |
+          sudo apt-get purge -y \
+            dotnet* ghc* libboost* android* swift* chromium* chrome* \
+            firefox* ffmpeg* powershell* codeql* microsoft* || true
+          sudo apt-get autoremove -y --purge
+          sudo docker system prune -a -f 2>/dev/null || true
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+          sudo -E apt -yqq install dos2unix libfuse-dev
+          sudo -E apt -yqq autoremove --purge && sudo -E apt -yqq clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Clone Upstream HEAD
+        run: |
+          chmod +x ./nn6000v2/scripts/update.sh
+          chmod +x ./nn6000v2/scripts/build.sh
+          git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} ./action_build
+          cd ./action_build && git rev-parse HEAD > ../repo_flag && cd ..
+          PROJECT_MIRRORS_FILE="./action_build/scripts/projectsmirrors.json"
+          if [ -f "$PROJECT_MIRRORS_FILE" ]; then
+            sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
+          fi
+
+      - name: Restore Build Cache
+        uses: actions/cache/restore@v5.0.4
+        with:
+          path: |
+            ./action_build/.ccache
+            ./action_build/staging_dir
+          key: canary-${{ hashFiles('repo_flag') }}
+          restore-keys: |
+            canary-
+            ubuntu-24.04-
+
+      - name: Canary Build (wifi version only)
+        run: |
+          ./nn6000v2/scripts/build.sh ${{ env.DEVICE_MODEL }} canary
+
+      - name: Save Build Cache
+        if: always()
+        uses: actions/cache/save@v5.0.4
+        with:
+          path: |
+            ./action_build/.ccache
+            ./action_build/staging_dir
+          key: canary-${{ hashFiles('repo_flag') }}
+
+      - name: Advance UPSTREAM_COMMIT lock
+        if: success()
+        run: |
+          SHA="${{ needs.check-upstream.outputs.upstream_head }}"
+          echo "$SHA" > nn6000v2/UPSTREAM_COMMIT
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add nn6000v2/UPSTREAM_COMMIT
+          git commit -m "canary: 推进上游锁定到 ${SHA:0:10}（验证构建通过）"
+          git push
