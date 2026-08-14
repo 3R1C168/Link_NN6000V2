@@ -32,7 +32,6 @@ source "$SCRIPT_DIR/general.sh"
 source "$SCRIPT_DIR/feeds.sh"
 source "$SCRIPT_DIR/packages.sh"
 source "$SCRIPT_DIR/system.sh"
-source "$SCRIPT_DIR/docker.sh"
 
 
 main() {
@@ -42,21 +41,13 @@ main() {
     update_feeds
     update_golang
     clone_quickfile
-    clone_lucky
-    clone_diskman
-    clone_dockerman
     clone_adguardhome
-    clone_easytier
-    clone_oaf
     clone_luci_tailscale
-    clone_passwall
     # 自定义新增的三个插件源（OpenClash / Nikki / MosDNS）
     clone_openclash
     clone_nikki
     clone_mosdns
     install_feeds
-    fix_smartdns_makefile
-    update_docker_stack
     remove_tweaked_packages
     change_dnsmasq2full
     fix_default_set
@@ -66,7 +57,6 @@ main() {
     update_dnsmasq_conf
     change_cpuusage
     set_custom_task
-    apply_passwall_tweaks
     update_nss_pbuf_performance
     update_nss_diag
     fix_compile_coremark
@@ -83,8 +73,6 @@ main() {
     fix_openssl_ktls
     fix_opkg_check
     fix_quectel_cm
-    install_pbr_isp
-    fix_pbr_ip_forward
     fix_quickstart
 }
 

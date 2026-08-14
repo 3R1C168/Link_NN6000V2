@@ -54,22 +54,9 @@ update_affinity_script() {
     fi
 }
 
-fix_hash_value() {
-    local makefile_path="$1"
-    local old_hash="$2"
-    local new_hash="$3"
-    local package_name="$4"
-
-    if [ -f "$makefile_path" ]; then
-        sed -i "s/$old_hash/$new_hash/g" "$makefile_path"
-        echo "已修正 $package_name 的哈希值。"
-    fi
-}
-
 change_cpuusage() {
     local luci_rpc_path="$BUILD_DIR/feeds/luci/modules/luci-base/root/usr/share/rpcd/ucode/luci"
     local qualcommax_sbin_dir="$BUILD_DIR/target/linux/qualcommax/base-files/sbin"
-    local filogic_sbin_dir="$BUILD_DIR/target/linux/mediatek/filogic/base-files/sbin"
 
     if [ -f "$luci_rpc_path" ]; then
         sed -i "s#const fd = popen('top -n1 | awk \\\'/^CPU/ {printf(\"%d%\", 100 - \$8)}\\\'')#const cpuUsageCommand = access('/sbin/cpuusage') ? '/sbin/cpuusage' : 'top -n1 | awk \\\'/^CPU/ {printf(\"%d%\", 100 - \$8)}\\\''#g" "$luci_rpc_path"
@@ -83,9 +70,6 @@ change_cpuusage() {
 
     if [ -d "$BUILD_DIR/target/linux/qualcommax" ]; then
         install -Dm755 "$BASE_PATH/patches/cpuusage" "$qualcommax_sbin_dir/cpuusage"
-    fi
-    if [ -d "$BUILD_DIR/target/linux/mediatek" ]; then
-        install -Dm755 "$BASE_PATH/patches/hnatusage" "$filogic_sbin_dir/cpuusage"
     fi
 }
 
@@ -116,18 +100,6 @@ EOF
     chmod +x "$sh_dir/custom_task"
 }
 
-apply_passwall_tweaks() {
-    local chnlist_path="$BUILD_DIR/feeds/passwall/luci-app-passwall/root/usr/share/passwall/rules/chnlist"
-    if [ -f "$chnlist_path" ]; then
-        >"$chnlist_path"
-    fi
-
-    local xray_util_path="$BUILD_DIR/feeds/passwall/luci-app-passwall/luasrc/passwall/util_xray.lua"
-    if [ -f "$xray_util_path" ]; then
-        sed -i 's/maxRTT = "1s"/maxRTT = "2s"/g' "$xray_util_path"
-        sed -i 's/sampling = 3/sampling = 5/g' "$xray_util_path"
-    fi
-}
 
 update_nss_pbuf_performance() {
     local pbuf_path="$BUILD_DIR/package/kernel/mac80211/files/pbuf.uci"
@@ -171,8 +143,8 @@ add_backup_info_to_sysupgrade() {
     if [ -f "$conf_path" ]; then
         cat >"$conf_path" <<'EOF'
 /etc/AdGuardHome.yaml
-/etc/easytier
-/etc/lucky/
+/etc/mosdns/
+/etc/openclash/
 EOF
     fi
 }
@@ -193,45 +165,6 @@ fix_rust_compile_error() {
     if [ -f "$BUILD_DIR/feeds/packages/lang/rust/Makefile" ]; then
         sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$BUILD_DIR/feeds/packages/lang/rust/Makefile"
     fi
-}
-
-fix_smartdns_makefile() {
-    local makefile="$BUILD_DIR/feeds/openwrt_packages/smartdns/Makefile"
-    if [ ! -f "$makefile" ]; then
-        makefile="$BUILD_DIR/feeds/packages/net/smartdns/Makefile"
-    fi
-    if [ ! -f "$makefile" ]; then
-        echo "smartdns Makefile not found, skip fix"
-        return 0
-    fi
-
-    echo "正在修复 smartdns Makefile，移除 Rust UI 依赖..."
-    
-    # 删除 Rust package include
-    sed -i '/rust-package.mk/d' "$makefile"
-    # 删除 Rust 相关变量
-    sed -i '/^RUST_PKG/d' "$makefile"
-    sed -i '/^PKG_BUILD_DEPENDS.*smartdns-ui/d' "$makefile"
-    sed -i '/^PKG_CONFIG_DEPENDS.*smartdns-ui/d' "$makefile"
-    # 删除 smartdns-ui 包定义
-    sed -i '/^define Package\/smartdns-ui/,/^endef/d' "$makefile"
-    # 删除 Build/Prepare 中的 smartdns-webui 下载
-    sed -i '/^define Download\/smartdns-webui/,/^endef/d' "$makefile"
-    sed -i '/smartdns-webui/d' "$makefile"
-    # 删除 Build/Prepare 和 Build/Compile 中的 ifneq 块
-    sed -i '/ifneq.*CONFIG_PACKAGE_smartdns-ui/,/endif/d' "$makefile"
-    # 删除 smartdns-ui 安装规则
-    sed -i '/^define Package\/smartdns-ui\/install/,/^endef/d' "$makefile"
-    # 删除 smartdns-ui 的 eval
-    sed -i '/smartdns-ui)/d' "$makefile"
-    # 补充缺失的 zlib 依赖
-    if grep -q 'DEPENDS:=.*+i386:libatomic +libopenssl' "$makefile"; then
-        if ! grep -q '+zlib' "$makefile"; then
-            sed -i 's/DEPENDS:=+i386:libatomic +libopenssl/DEPENDS:=+i386:libatomic +libopenssl +zlib/' "$makefile"
-        fi
-    fi
-    
-    echo "smartdns Makefile 修复完成"
 }
 
 update_nginx_ubus_module() {
@@ -282,94 +215,7 @@ fix_opkg_check() {
     fi
 }
 
-install_pbr_isp() {
-    local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
-    local pbr_dir="$pbr_pkg_dir/files/usr/share/pbr"
-    local pbr_conf="$pbr_pkg_dir/files/etc/config/pbr"
-    local pbr_makefile="$pbr_pkg_dir/Makefile"
-    local pbr_init_script="$pbr_pkg_dir/files/etc/init.d/pbr"
 
-    if [ -d "$pbr_pkg_dir" ]; then
-        echo "正在安装 PBR 多 ISP 自动识别脚本..."
-        install -Dm755 "$BASE_PATH/patches/pbr.user.isp" "$pbr_dir/pbr.user.isp"
-
-        if [ -f "$pbr_makefile" ]; then
-            if ! grep -q "pbr.user.isp" "$pbr_makefile"; then
-                echo "正在修改 PBR Makefile 添加安装规则..."
-                sed -i '/pbr.user.netflix.*\$(1)/a\
-	$(INSTALL_DATA) ./files/usr/share/pbr/pbr.user.isp $(1)/usr/share/pbr/pbr.user.isp' "$pbr_makefile"
-            fi
-        fi
-        
-        # Add auto-retry mechanism to pbr init script
-        if [ -f "$pbr_init_script" ]; then
-            echo "正在添加 PBR 自动重试机制..."
-            # Simple retry: try every 10s for up to 50s if not configured
-            cat >> "$pbr_init_script" << 'EOF'
-
-# PBR auto-retry (simple version)
-[ -f /var/run/pbr_configured ] || ( for i in 1 2 3 4 5; do
-    sleep 10
-    /usr/share/pbr/pbr.user.isp >/dev/null 2>&1 && break
-done ) &
-EOF
-        fi
-    fi
-
-    if [ -f "$pbr_conf" ]; then
-        if ! grep -q "pbr.user.isp" "$pbr_conf"; then
-            echo "正在添加 PBR ISP 自动识别配置条目..."
-            sed -i "/option path '\/usr\/share\/pbr\/pbr.user.netflix'/,/option enabled '0'/{
-                /option enabled '0'/a\\
-\\
-config include\\
-	option path '/usr/share/pbr/pbr.user.isp'\\
-	option enabled '1'
-            }" "$pbr_conf"
-        fi
-    fi
-}
-
-fix_pbr_ip_forward() {
-    local pbr_pkg_dir="$BUILD_DIR/package/feeds/packages/pbr"
-    local pbr_init_script="$pbr_pkg_dir/files/etc/init.d/pbr"
-
-    if [ ! -d "$pbr_pkg_dir" ]; then
-        echo "PBR package directory not found: $pbr_pkg_dir"
-        return 1
-    fi
-
-    if [ ! -f "$pbr_init_script" ]; then
-        echo "PBR init script not found: $pbr_init_script"
-        return 1
-    fi
-
-    # Check if fix is already applied (enabled check already present)
-    if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$pbr_init_script"; then
-        echo "PBR IP Forward fix already applied"
-        return 0
-    fi
-
-    # Check if the original pattern exists that needs fixing
-    if ! grep -q '\[ -n "$strict_enforcement" \] && \[ "$(cat /proc/sys/net/ipv4/ip_forward)"' "$pbr_init_script"; then
-        echo "PBR IP Forward: 未找到需要修复的代码，可能上游已修复或此版本无此问题"
-        return 0
-    fi
-
-    echo "正在应用 PBR IP Forward 修复..."
-    # Fix: Add enabled check before strict_enforcement check
-    # Original: if [ -n "$strict_enforcement" ] && [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "0" ]; then
-    # Fixed:   if [ -n "$enabled" ] && [ -n "$strict_enforcement" ] && [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "0" ]; then
-    sed -i 's/\[ -n "\$strict_enforcement" \] && \[ "\$(cat \/proc\/sys\/net\/ipv4\/ip_forward)"/\[ -n "\$enabled" \] \&\& \[ -n "\$strict_enforcement" \] \&\& \[ "\$(cat \/proc\/sys\/net\/ipv4\/ip_forward)"/' "$pbr_init_script"
-    
-    if grep -q '\[ -n "$enabled" \] && \[ -n "$strict_enforcement" \]' "$pbr_init_script"; then
-        echo "PBR IP Forward 修复应用成功"
-        return 0
-    else
-        echo "修复应用失败：未找到预期的修复内容"
-        return 1
-    fi
-}
 
 fix_quectel_cm() {
     local makefile_path="$BUILD_DIR/package/feeds/packages/quectel-cm/Makefile"

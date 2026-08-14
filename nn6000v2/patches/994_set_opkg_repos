@@ -1,21 +1,21 @@
 #!/bin/sh
-# 配置 opkg 软件源（使用浙江大学镜像）
+# opkg 软件源配置
+#
+# 注意：本固件为自编译 snapshot（26.208），官方 snapshot 仓库已切换为 apk 格式
+# 且 opkg 索引（Packages.gz）不再提供，外部源安装 kmod/luci 包会因版本/格式
+# 错配失败（例如引发 luci.cbi.datatypes 缺失的运行时错误）。
+# 因此不再配置外部 distfeeds，仅保留本地 kmod 搜索路径；安装软件请使用
+# 固件内预编译的插件，或用 imgtools / 重新编译的方式加入。
 
-# 覆盖原有软件源配置
-cat > /etc/opkg/distfeeds.conf << 'EOF'
-src/gz openwrt_base https://mirror.zju.edu.cn/immortalwrt/releases/24.10.5/packages/aarch64_cortex-a53/base
-src/gz openwrt_luci https://mirror.zju.edu.cn/immortalwrt/releases/24.10.5/packages/aarch64_cortex-a53/luci
-src/gz openwrt_packages https://mirror.zju.edu.cn/immortalwrt/releases/24.10.5/packages/aarch64_cortex-a53/packages
-src/gz openwrt_routing https://mirror.zju.edu.cn/immortalwrt/releases/24.10.5/packages/aarch64_cortex-a53/routing
-src/gz openwrt_telephony https://mirror.zju.edu.cn/immortalwrt/releases/24.10.5/packages/aarch64_cortex-a53/telephony
-EOF
+# 清空发行版软件源，防止 opkg 误装错配包
+cat > /etc/opkg/distfeeds.conf << 'EOF2'
+EOF2
 
-# 配置 opkg.conf
-cat > /etc/opkg.conf << 'EOF'
+cat > /etc/opkg.conf << 'EOF2'
 dest root /
 dest ram /tmp
 lists_dir ext /var/opkg-lists
 option overlay_root /overlay
-EOF
+EOF2
 
-echo "✓ Opkg 软件源已配置"
+echo "✓ Opkg 外部软件源已禁用（snapshot 固件与 release 仓库错配）"
