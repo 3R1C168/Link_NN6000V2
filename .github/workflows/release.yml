@@ -234,11 +234,10 @@ jobs:
             echo "## 版本信息"
             echo "- 源码：${{ env.BUILD_SRC }}"
             echo "- Kernel: ${{ env.KVER }}"
-            echo "- WIFI 密码：147258369"
             echo "- LAN 地址：10.0.0.1"
             echo "- 账户：root"
             echo "- 密码：无"
-            echo "- no_wifi 后缀的版本未包含 WIFI 驱动程序"
+            echo "- 本固件为无 WiFi 版本，未包含 WIFI 驱动程序"
           } > release_body.txt
 
       - name: Release Firmware
