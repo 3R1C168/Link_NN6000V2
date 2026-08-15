@@ -10,22 +10,44 @@ pin_gettext_full() {
     local gt_dir="$BUILD_DIR/package/libs/gettext-full"
     if grep -q "PKG_VERSION:=0.24.2" "$gt_dir/Makefile" 2>/dev/null; then
         echo "gettext-full 已是 0.24.2，跳过覆盖"
-        return 0
-    fi
-    local tmp
-    tmp=$(mktemp -d)
-    git clone -q --filter=blob:none --no-checkout https://github.com/VIKINGYFY/immortalwrt.git "$tmp/imw" || {
-        echo "错误：克隆上游仓库失败，无法回退 gettext-full" >&2
+    else
+        local tmp
+        tmp=$(mktemp -d)
+        git clone -q --filter=blob:none --no-checkout https://github.com/VIKINGYFY/immortalwrt.git "$tmp/imw" || {
+            echo "错误：克隆上游仓库失败，无法回退 gettext-full" >&2
+            rm -rf "$tmp"
+            exit 1
+        }
+        (cd "$tmp/imw" && git sparse-checkout init --cone \
+            && git sparse-checkout set package/libs/gettext-full \
+            && git checkout -q 0237b9a0)
+        rm -rf "$gt_dir"
+        cp -r "$tmp/imw/package/libs/gettext-full" "$gt_dir"
         rm -rf "$tmp"
-        exit 1
-    }
-    (cd "$tmp/imw" && git sparse-checkout init --cone \
-        && git sparse-checkout set package/libs/gettext-full \
-        && git checkout -q 0237b9a0)
-    rm -rf "$gt_dir"
-    cp -r "$tmp/imw/package/libs/gettext-full" "$gt_dir"
-    rm -rf "$tmp"
-    echo "✓ gettext-full 已回退到 0.24.2（0237b9a0）"
+        echo "✓ gettext-full 已回退到 0.24.2（0237b9a0）"
+    fi
+    # autogen.sh 默认从 GNULIB_SRCDIR（stable-202507）重新拉取 gnulib 模块，
+    # 其 string-desc.h 引入 HAVE_TYPEOF 门控的 rw_string_desc_t，与 0.24.2
+    # tarball 内的 msgl-iconv.h（无条件引用该类型）不匹配，在新版
+    # autoconf/automake 生成的 config.h 判定下直接编译失败。
+    # 0.24.2 是 release tarball，自带完整且匹配的 gnulib-lib，
+    # 加 --skip-gnulib 让 autogen 不再覆盖这些文件。
+    if ! grep -q -- "--skip-gnulib" "$gt_dir/Makefile"; then
+        sed -i 's|\./autogen\.sh|./autogen.sh --skip-gnulib|g' "$gt_dir/Makefile"
+        echo "✓ gettext-full autogen 已加 --skip-gnulib"
+    fi
+    # 无缓存首跑（无 staging_dir）或包定义被 pin 替换时，必须清掉旧版本
+    # （gettext-1.0 或半成品 gettext-0.24.2）的构建残留与 stamp，
+    # 否则 make 认为已构建直接跳过 / 混用旧产物导致 rw_string_desc_t 报错。
+    rm -rf "$BUILD_DIR/build_dir/hostpkg/gettext-0.24.2" \
+           "$BUILD_DIR/build_dir/hostpkg/gettext-1.0" \
+           "$BUILD_DIR/build_dir/target-aarch64_cortex-a53_musl/gettext-0.24.2" \
+           "$BUILD_DIR/build_dir/target-aarch64_cortex-a53_musl/gettext-1.0"
+    rm -f "$BUILD_DIR/staging_dir/hostpkg/stamp/.gettext-full_installed" \
+          "$BUILD_DIR/staging_dir/hostpkg/stamp/gettext-full" \
+          "$BUILD_DIR/staging_dir/target-aarch64_cortex-a53_musl/stamp/.gettext-full_installed" \
+          "$BUILD_DIR/staging_dir/target-aarch64_cortex-a53_musl/stamp/gettext-full"
+    echo "✓ gettext-full 旧构建残留已清理"
 }
 
 change_dnsmasq2full() {
