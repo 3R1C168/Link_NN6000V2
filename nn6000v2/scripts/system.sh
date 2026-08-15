@@ -48,6 +48,11 @@ pin_gettext_full() {
           "$BUILD_DIR/staging_dir/target-aarch64_cortex-a53_musl/stamp/.gettext-full_installed" \
           "$BUILD_DIR/staging_dir/target-aarch64_cortex-a53_musl/stamp/gettext-full"
     echo "✓ gettext-full 旧构建残留已清理"
+    # 自检：包定义必须同时满足 0.24.2 与 --skip-gnulib，否则就是被
+    # 别处（如已移除的 revert_gettext_full）换成了不兼容的 openwrt 版
+    grep -q "PKG_VERSION:=0.24.2" "$gt_dir/Makefile" \
+        && grep -q -- "--skip-gnulib" "$gt_dir/Makefile" \
+        || { echo "错误：gettext-full 包定义被污染，非预期的 0.24.2+skip-gnulib 组合" >&2; exit 1; }
 }
 
 change_dnsmasq2full() {

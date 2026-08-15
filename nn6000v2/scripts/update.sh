@@ -75,28 +75,6 @@ main() {
     fix_opkg_check
     fix_quectel_cm
     fix_quickstart
-    revert_gettext_full
-}
-
-# 上游 gettext-full 1.0 host 编译损坏（stdcountof.h 缺失），
-# 用官方 openwrt 的 0.24.2 覆盖。必须在 reset_feeds_conf 之后执行，
-# 否则会被 git reset --hard 回滚。上游修复后可删除本函数及调用。
-revert_gettext_full() {
-    local dst="$BUILD_DIR/package/libs/gettext-full"
-    if grep -q "PKG_VERSION:=0.24.2" "$dst/Makefile" 2>/dev/null; then
-        echo "gettext-full 已是 0.24.2，跳过覆盖"
-        return 0
-    fi
-    local tmp
-    tmp=$(mktemp -d)
-    git clone --depth 1 --filter=blob:none --sparse https://github.com/openwrt/openwrt.git "$tmp/ow" || {
-        echo "错误：克隆官方 openwrt 失败" >&2; rm -rf "$tmp"; exit 1;
-    }
-    (cd "$tmp/ow" && git sparse-checkout set package/libs/gettext-full)
-    rm -rf "$dst"
-    cp -r "$tmp/ow/package/libs/gettext-full" "$dst"
-    rm -rf "$tmp"
-    grep "PKG_VERSION" "$dst/Makefile"
 }
 
 main "$@"
